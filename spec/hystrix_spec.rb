@@ -1,0 +1,2 @@
+describe Hystrix do
+end
