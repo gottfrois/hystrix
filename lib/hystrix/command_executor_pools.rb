@@ -4,14 +4,12 @@ module Hystrix
   class CommandExecutorPools
     include Singleton
 
-    attr_reader :pools
-
     def initialize
       @lock = Mutex.new
       @pools = {}
     end
 
-    def get(name:, size: Celluloid.cores)
+    def get(name:, size:)
       lock.synchronize do
         pools[name] ||= Hystrix::CommandExecutorPool.new(name: name, size: size)
       end
@@ -25,7 +23,7 @@ module Hystrix
 
     private
 
-    attr_reader :lock
+    attr_reader :pools, :lock
 
   end
 end

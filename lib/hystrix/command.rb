@@ -1,6 +1,6 @@
 module Hystrix
   class Command
-    include Celluloid
+    include Concurrent::Async
 
     attr_accessor :executor_pool
 
@@ -9,26 +9,27 @@ module Hystrix
       executor = nil
 
       begin
-        Circuit.new(self.class._pool_name) do
+        circuit.bridge do
           executor = executor_pool.take
           result = executor.run(self)
         end
-      rescue Exception => original_exception
+      rescue NoMethodError => e
+        raise e
+      rescue Exception => e
         begin
-          result = fallback(original_exception)
+          result = fallback(e)
         rescue NotImplementedError
-          raise original_exception
+          raise e.cause.present? ? e.cause : e
         end
       ensure
         executor.unlock if executor
-        terminate
       end
 
       return result
     end
 
     def queue
-      future.execute
+      async.execute
     end
 
     def run
@@ -37,6 +38,10 @@ module Hystrix
 
     def fallback(*)
       fail NotImplementedError
+    end
+
+    def circuit
+      @circuit ||= Circuit.new(name: self.class._pool_name)
     end
 
     def executor_pool
@@ -56,7 +61,7 @@ module Hystrix
     end
 
     def self._pool_size
-      @_pool_size || Celluloid.cores
+      @_pool_size || Concurrent.processor_count
     end
 
   end

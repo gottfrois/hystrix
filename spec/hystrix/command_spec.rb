@@ -3,23 +3,30 @@ describe Hystrix::Command do
   class FooCommand < Hystrix::Command
 
     pool_size 8
-    pool_name 'bar'
 
     def initialize(value:, wait: 0, fail: false)
       @value = value
-      @wait = wait
-      @fail = fail
+      @wait  = wait
+      @fail  = fail
     end
 
     def run
       sleep(@wait)
-      abort 'error' if @fail
+      fail 'error' if @fail
       @value
     end
 
     def fallback(exception)
       'fallback'
     end
+  end
+
+  before do
+    Hystrix::Circuit.reset
+  end
+
+  after do
+    Hystrix::Circuit.reset
   end
 
   describe '#execute' do
@@ -30,12 +37,6 @@ describe Hystrix::Command do
 
     it 'returns fallback value on exceptions' do
       expect(FooCommand.new(value: 'foo', fail: true).execute).to eq('fallback')
-    end
-
-    it 'executes only once' do
-      command = FooCommand.new(value: 'foo')
-      expect(command.execute).to eq('foo')
-      expect { command.execute }.to raise_error
     end
 
     it 'raises the original exception if no fallback is defined' do
@@ -50,37 +51,37 @@ describe Hystrix::Command do
 
     context 'when circuit is closed' do
 
-      let(:circuit) { Stoplight::Light.new('foo', &code) }
+      let(:circuit) { Hystrix::Circuit.new(name: 'foo') }
 
       before do
-        allow(Stoplight::Light).to receive(:new).and_return(circuit)
+        allow(command).to receive(:circuit).and_return(circuit)
       end
 
       context 'and code run successfully' do
 
-        let(:code) { -> { true } }
+        let(:command) { FooCommand.new(value: 'foo') }
 
         it 'does not open the cirtcuit' do
-          FooCommand.new(value: 'foo').execute
-          expect(circuit.color).to eq(Stoplight::Color::GREEN)
+          command.execute
+          expect(circuit.open?).to eq(false)
         end
 
       end
 
-      context 'and code fails' do
+      context 'and code fail' do
 
-        let(:code) { -> { fail } }
+        let(:command) { FooCommand.new(value: 'foo', fail: true) }
 
         it 'does not open the circuit on first failure' do
-          FooCommand.new(value: 'foo').execute
-          expect(circuit.color).to eq(Stoplight::Color::GREEN)
+          command.execute
+          expect(circuit.open?).to eq(false)
         end
 
         it 'does open the circuit after a given number of failures' do
-          3.times do
-            FooCommand.new(value: 'foo').execute
+          10.times do
+            command.execute
           end
-          expect(circuit.color).to eq(Stoplight::Color::RED)
+          expect(circuit.open?).to eq(true)
         end
 
       end
@@ -99,25 +100,20 @@ describe Hystrix::Command do
       expect(FooCommand.new(value: 'foo', fail: true).queue.value).to eq('fallback')
     end
 
-    it 'executes only once' do
-      command = FooCommand.new(value: 'foo')
-      expect(command.queue.value).to eq('foo')
-      expect { command.queue.value }.to raise_error
-    end
-
   end
 
   it 'executes the fallback if its enable to get an executor to run the command' do
-    pool = Hystrix::CommandExecutorPool.new(name: 'foo', size: 1)
+    pool = Hystrix::CommandExecutorPool.new(name: FooCommand.class.name, size: 1)
 
-    c1 = FooCommand.new(value: 'c1', wait: 1)
-    c1.executor_pool = pool
-    c2 = FooCommand.new(value: 'c2')
-    c2.executor_pool = pool
+    slow = FooCommand.new(value: 'slow', wait: 1)
+    slow.executor_pool = pool
+    fast = FooCommand.new(value: 'fast', wait: 0)
+    fast.executor_pool = pool
 
-    f1 = c1.queue
-    expect(c2.execute).to eq('fallback')
-    expect(f1.value).to eq('c1')
+    f = slow.queue
+    sleep(0.1)
+    expect(fast.execute).to eq('fallback')
+    expect(f.value).to eq('slow')
   end
 
 end

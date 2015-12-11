@@ -9,7 +9,7 @@ describe Hystrix::CommandExecutorPool do
 
       aggregate_failures do
         expect(pool.take).not_to be_nil
-        expect { pool.take }.to raise_error(described_class::NoExecutorAvailableError)
+        expect { pool.take }.to raise_error(Hystrix::NoExecutorAvailableError)
       end
     end
 
@@ -23,7 +23,7 @@ describe Hystrix::CommandExecutorPool do
 
     it 'fails if there are no executors configured' do
       pool = described_class.new(name: 'test', size: 0)
-      expect { pool.take }.to raise_error
+      expect { pool.take }.to raise_error(Hystrix::NoExecutorAvailableError)
     end
 
   end

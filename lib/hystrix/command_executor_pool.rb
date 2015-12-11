@@ -1,11 +1,9 @@
 module Hystrix
   class CommandExecutorPool
 
-    NoExecutorAvailableError = Class.new(StandardError)
-
     attr_reader :name, :size, :executors
 
-    def initialize(name:, size: Celluloid.cores)
+    def initialize(name:, size:)
       @name               = name
       @size               = size
       @executors          = []
@@ -20,7 +18,7 @@ module Hystrix
         end
       end
 
-      raise Hystrix::CommandExecutorPool::NoExecutorAvailableError
+      raise NoExecutorAvailableError
     end
 
     def shutdown
