@@ -18,6 +18,7 @@ module Hystrix
         timeout_seconds:  2,
         exceptions:       [Exception],
         time_window:      5,
+        cache:            Moneta.new(:Memory, threadsafe: true)
       })
     end
 
