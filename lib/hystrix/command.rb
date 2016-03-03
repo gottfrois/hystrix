@@ -9,15 +9,19 @@ module Hystrix
       executor = nil
 
       begin
-        circuit.bridge do
-          executor = executor_pool.take
-          result = executor.run(self)
+        EventBus.notify('success') do
+          circuit.bridge do
+            executor = executor_pool.take
+            result = executor.run(self)
+          end
         end
       rescue NoMethodError => e
         raise e
       rescue Exception => e
         begin
-          result = fallback(e)
+          EventBus.notify('fallback') do
+            result = fallback(e)
+          end
         rescue NotImplementedError
           raise e.cause.present? ? e.cause : e
         end
